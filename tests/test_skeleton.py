@@ -1,6 +1,6 @@
 import pytest
 
-from grit_bot.skeleton import fib, main
+from iGritty.skeleton import fib, main
 
 __author__ = "Diego Fierros"
 __copyright__ = "Diego Fierros"

@@ -1,8 +1,8 @@
 ========
-grit_bot
+iGritty
 ========
 
-This is the documentation of **grit_bot**.
+This is the documentation of **iGritty**.
 
 .. note::
 

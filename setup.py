@@ -1,5 +1,5 @@
 """
-    Setup file for grit_bot.
+    Setup file for iGritty.
     Use setup.cfg to configure your project.
 
     This file was generated with PyScaffold 4.6.
