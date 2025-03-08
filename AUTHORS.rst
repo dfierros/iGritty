@@ -2,4 +2,4 @@
 Contributors
 ============
 
-* Diego Fierros <dfierros@alumni.princeton.edu>
+* Diego Fierros <diegofierros10@gmail.com>
