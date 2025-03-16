@@ -15,6 +15,7 @@ import discord
 from discord.ext import commands
 
 from iGritty.common.params import DEBUG_MSG_DURATION_SECONDS
+from iGritty.db import iGrittyDB
 
 DEFAULT_LEAD_TIME_MINS: int = 10
 TIMEZONE: ZoneInfo = ZoneInfo("America/New_York")
@@ -23,10 +24,27 @@ logger = logging.getLogger("discord")
 
 
 class GameTrainScheduler(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    """
+    Game trains scheduler
+
+    Arguments:
+        bot (commands.Bot): discord bot interface
+        db (iGrittyDB, optional): optional database interface for saving trains to be
+            restored upon bot reload
+
+    """
+
+    def __init__(
+        self,
+        bot: commands.Bot,
+        db: Optional[iGrittyDB] = None,
+    ):
         self.bot = bot
+        self.db = db
         self._scheduled_train_tasks = deque([])
         logger.info("Loaded Game Train Schduler")
+        if self.db:
+            self._load_scheduled_trains()
 
     def cog_unload(self):
         """
@@ -39,6 +57,32 @@ class GameTrainScheduler(commands.Cog):
             logger.info("Cancelling %s", train_task)
             train_task.cancel()
         logger.info("Unloaded Game Train Schduler")
+
+    def _load_scheduled_trains(self):
+        """
+        Load scheduled trains from the database, removing any that have expired
+
+        """
+        for train in self.db.get_trains():
+            train_id, game, channel_name, departure_datetime, _ = train
+
+            # If this train is expired, remove from the DB and skip to the next train
+            if departure_datetime < datetime.datetime.now():
+                logger.warning("Removing expired scheduled train [%s]", train)
+                self.db.remove_train(train_id)
+                continue
+            else:
+                logger.info("Loading scheduled train [%s]", train)
+
+            channel_id = self.db.get_id_for_channel("text", channel_name=channel_name)
+
+            task = asyncio.create_task(
+                self.run_train_at_time(
+                    game=game, start_time=departure_datetime, channel_id=channel_id
+                )
+            )
+            self._scheduled_train_tasks.append(task)
+            task.add_done_callback(self._scheduled_train_tasks.remove)
 
     async def _train(
         self,
@@ -98,17 +142,13 @@ class GameTrainScheduler(commands.Cog):
             start_time (datetime.datetime): time at which the train should depart
             channel_id (int): channel on which the train should run
 
-        Raises:
-            ValueError: if the given start time is in the past
-
         """
         if start_time < datetime.datetime.now():
             logger.error("Cannot schedule past train at %s", start_time)
-            raise ValueError("Cannot schedule past train at %s" % start_time)
-
-        await self.wait_until(start_time)
-        await self._train(channel_id=channel_id, game_name=game)
-        logger.info("Scheduled train complete")
+        else:
+            await self.wait_until(start_time)
+            await self._train(channel_id=channel_id, game_name=game)
+            logger.info("Scheduled train complete")
 
     # --------------------
     # User-facing commands
@@ -176,6 +216,9 @@ class GameTrainScheduler(commands.Cog):
             )
         )
         self._scheduled_train_tasks.append(task)
+        if self.db:
+            self.db.add_train_to_table(game, channel.name, run_time)
+            self.db.add_channel_to_table("text", channel.id, channel.name)
 
         logger.info(
             "Scheduled a game train at %s in channel %s for game: %s",

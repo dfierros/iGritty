@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 from iGritty import __version__ as bot_version
 from iGritty.cogs.game_train_scheduler import GameTrainScheduler
 from iGritty.common.params import DEBUG_MSG_DURATION_SECONDS
+from iGritty.db import iGrittyDB
 
 # -------------
 # Logging Setup
@@ -51,7 +52,7 @@ intents.members = True
 intents.message_content = True
 
 bot = commands.Bot(
-    command_prefix="?",
+    command_prefix="!",
     description=DESCRIPTION,
     intents=intents,
 )
@@ -65,7 +66,10 @@ bot = commands.Bot(
 async def on_ready():
     logger.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
 
-    await bot.add_cog(GameTrainScheduler(bot))
+    db = iGrittyDB("database/bot.db")
+    db.setup_text_channel_table()
+    db.setup_train_table()
+    await bot.add_cog(GameTrainScheduler(bot, db))
     logger.info("------")
 
 
