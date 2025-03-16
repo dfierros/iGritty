@@ -3,22 +3,21 @@ Background process to launch the game train
 
 """
 
-import logging
-from datetime import timedelta, timezone
-
+import asyncio
 import datetime
-import discord
-from discord.ext import commands, tasks
+import logging
+from collections import deque
+from datetime import timedelta
+from typing import Optional
 from zoneinfo import ZoneInfo
 
-DEFAULT_TARGET_CHANNEL: int = 1348041444644094034
+import discord
+from discord.ext import commands
 
-# If no tzinfo is given then UTC is assumed.
+from iGritty.common.params import DEBUG_MSG_DURATION_SECONDS
+
 DEFAULT_LEAD_TIME_MINS: int = 10
-TIMES = [
-    datetime.time(hour=12, minute=50, tzinfo=timezone.utc),
-]
-
+TIMEZONE: ZoneInfo = ZoneInfo("America/New_York")
 
 logger = logging.getLogger("discord")
 
@@ -26,23 +25,36 @@ logger = logging.getLogger("discord")
 class GameTrainScheduler(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.launch_scheduled_train.start()
+        self._scheduled_train_tasks = deque([])
+        logger.info("Loaded Game Train Schduler")
 
     def cog_unload(self):
-        self.launch_scheduled_train.cancel()
+        """
+        When unloading this module...
+        * Cancel any pending game trains
+
+        """
+        # Cancel any scheduled trains when unloaded
+        for train_task in self._scheduled_train_tasks:
+            logger.info("Cancelling %s", train_task)
+            train_task.cancel()
+        logger.info("Unloaded Game Train Schduler")
 
     async def _train(
         self,
+        channel_id: int,
+        game_name: Optional[str] = None,
         lead_time: timedelta = datetime.timedelta(minutes=DEFAULT_LEAD_TIME_MINS),
         poll_duration: timedelta = datetime.timedelta(hours=1),
-        channel_id: int = DEFAULT_TARGET_CHANNEL,
     ):
         """
         Helper method which launches the train
 
         Arguments:
-            lead_time (timedelta): how long from now the train should depart
             channel_id (int): channel at which the train departure should be announced
+            game_name (str, optional): the name of the game for the train
+            lead_time (timedelta): how long from now the train should depart
+            poll_duration (timedelta): how long the train poll should run
 
         """
         channel = self.bot.get_channel(channel_id)
@@ -55,31 +67,136 @@ class GameTrainScheduler(commands.Cog):
         train_poll.add_answer(text="Yea")
         train_poll.add_answer(text="Nah")
 
-        departure_time = (
-            datetime.datetime.now(tz=ZoneInfo("America/New_York")) - lead_time
-        ).strftime("%I:%M %p")
-        await channel.send(
-            f"Game Train departing in {lead_time.seconds // 60} minutes! (At {departure_time} EST)",
-            poll=train_poll,
+        departure_time = (datetime.datetime.now(tz=TIMEZONE) - lead_time).strftime(
+            "%I:%M %p"
         )
 
-    @tasks.loop(time=TIMES)
-    async def launch_scheduled_train(self):
-        logger.info("Launching scheduled game train")
-        await self._train()
+        msg = f"Game Train departing in {lead_time.seconds // 60} minutes! (At {departure_time} EST)"
+        if game_name:
+            msg = f"[{game_name}] {msg}"
+        await channel.send(msg, poll=train_poll)
 
-    @commands.command(name="train")
-    async def launch_train_now(
+    async def wait_until(self, time: datetime.datetime):
+        """
+        Task which waits for a given time
+
+        Arguments:
+            time (datetime.datetime): time for which to wait
+
+        """
+        now = datetime.datetime.now()
+        await asyncio.sleep((time - now).total_seconds())
+
+    async def run_train_at_time(
+        self, game: str, start_time: datetime.datetime, channel_id: int
+    ):
+        """
+        Run a train at some time in the future
+
+        Arguments:
+            game (str): game for which the train should run
+            start_time (datetime.datetime): time at which the train should depart
+            channel_id (int): channel on which the train should run
+
+        Raises:
+            ValueError: if the given start time is in the past
+
+        """
+        if start_time < datetime.datetime.now():
+            logger.error("Cannot schedule past train at %s", start_time)
+            raise ValueError("Cannot schedule past train at %s" % start_time)
+
+        await self.wait_until(start_time)
+        await self._train(channel_id=channel_id, game_name=game)
+        logger.info("Scheduled train complete")
+
+    # --------------------
+    # User-facing commands
+    # --------------------
+
+    @commands.command(name="schedule_train")
+    async def schedule_train(
         self,
         ctx: commands.Context,
-        lead_time_mins: int = DEFAULT_LEAD_TIME_MINS,
+        time_str: str,
+        game: Optional[str] = None,
+        date_str: Optional[str] = None,
+        channel_id: Optional[int] = None,
     ):
+        """
+        Schedule a game train for departure at a specific time
+
+        Arguments:
+            ctx (commands.Context): context in which this command is called
+            time_str (str): The time to run the train, HH:MM format, must still be today
+            game (str, optional): game for which to schedule the train
+            date_str (str, optional): The date to run the train, DD/MM/YYYY format, must be in the future.
+                If not provided, assume today
+            channel_id (int, optional): the channel in which to launch the train.
+                If not provided, assume the channel in which the command is called
+
+        """
+        logger.info(
+            "Scheduled game train requested [%s]",
+            (game, time_str, date_str, channel_id),
+        )
+
+        # Get the date
+        if date_str is None:
+            date = datetime.datetime.now()
+        else:
+            date = datetime.datetime.strptime(date_str, "%d/%m/%Y")
+
+        run_time = datetime.datetime.strptime(time_str, "%H:%M").replace(
+            year=date.year, month=date.month, day=date.day
+        )
+
+        # Ensure that this train is scheduled for the future
+        now = datetime.datetime.now()
+        delay = (run_time - now).total_seconds()
+        if delay < 0:
+            msg = f"Cannot schedule train for the past ({run_time.strftime('%Y-%m-%d %H:%M:%S')})"
+            await ctx.send(msg, delete_after=DEBUG_MSG_DURATION_SECONDS)
+            logger.error(msg)
+
+        # Get the channel
+        if channel_id is not None:
+            channel = self.bot.get_channel(int(channel_id))
+        else:
+            channel = ctx.channel
+
+        if channel is None:
+            msg = "Unable to determine channel to run train"
+            await ctx.send(msg, delete_after=DEBUG_MSG_DURATION_SECONDS)
+            logger.error(msg)
+
+        task = asyncio.create_task(
+            self.run_train_at_time(
+                game=game, start_time=run_time, channel_id=channel.id
+            )
+        )
+        self._scheduled_train_tasks.append(task)
+
+        logger.info(
+            "Scheduled a game train at %s in channel %s for game: %s",
+            run_time.strftime("%Y-%m-%d %H:%M:%S"),
+            channel,
+            game,
+        )
+        await ctx.channel.send(
+            f"All set, game train will depart in {delay / 60:.2f} minutes,"
+            f" at {run_time.strftime('%Y-%m-%d %H:%M:%S')}!"
+        )
+
+    @commands.command(name="train")
+    async def launch_train_now(self, ctx: commands.Context, game: Optional[str] = None):
         """
         Launch the game train now in this channel
 
+        Arguments:
+            ctx (commands.Context): context in which this command is called
+            game (str, optional): game for which to run the train
+
         """
-        logger.info("Launching user-requested game train")
-        await self._train(
-            lead_time=timedelta(minutes=lead_time_mins),
-            channel_id=ctx.channel.id,
-        )
+        logger.info("Launching user-requested game train for game %s", game)
+        await self._train(channel_id=ctx.channel.id, game_name=game)
