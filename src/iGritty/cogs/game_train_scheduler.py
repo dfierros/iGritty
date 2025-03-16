@@ -6,7 +6,6 @@ Background process to launch the game train
 import asyncio
 import datetime
 import logging
-from collections import deque
 from datetime import timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
@@ -29,22 +28,20 @@ class GameTrainScheduler(commands.Cog):
 
     Arguments:
         bot (commands.Bot): discord bot interface
-        db (iGrittyDB, optional): optional database interface for saving trains to be
-            restored upon bot reload
+        db (iGrittyDB): database interface for saving trains to be restored upon bot reload
 
     """
 
     def __init__(
         self,
         bot: commands.Bot,
-        db: Optional[iGrittyDB] = None,
+        db: iGrittyDB,
     ):
         self.bot = bot
         self.db = db
-        self._scheduled_train_tasks = deque([])
+        self._scheduled_train_tasks = dict()
         logger.info("Loaded Game Train Schduler")
-        if self.db:
-            self._load_scheduled_trains()
+        self._load_scheduled_trains()
 
     def cog_unload(self):
         """
@@ -53,7 +50,7 @@ class GameTrainScheduler(commands.Cog):
 
         """
         # Cancel any scheduled trains when unloaded
-        for train_task in self._scheduled_train_tasks:
+        for train_task in self._scheduled_train_tasks.values():
             logger.info("Cancelling %s", train_task)
             train_task.cancel()
         logger.info("Unloaded Game Train Schduler")
@@ -81,8 +78,9 @@ class GameTrainScheduler(commands.Cog):
                     game=game, start_time=departure_datetime, channel_id=channel_id
                 )
             )
-            self._scheduled_train_tasks.append(task)
-            task.add_done_callback(self._scheduled_train_tasks.remove)
+            self._scheduled_train_tasks[train_id] = task
+            # Have this train remove itself from the scheduled train map upon completion
+            task.add_done_callback(lambda _: self._scheduled_train_tasks.pop(train_id))
 
     async def _train(
         self,
@@ -215,10 +213,10 @@ class GameTrainScheduler(commands.Cog):
                 game=game, start_time=run_time, channel_id=channel.id
             )
         )
-        self._scheduled_train_tasks.append(task)
-        if self.db:
-            self.db.add_train_to_table(game, channel.name, run_time)
-            self.db.add_channel_to_table("text", channel.id, channel.name)
+
+        train_id = self.db.add_train_to_table(game, channel.name, run_time)
+        self._scheduled_train_tasks[train_id] = task
+        self.db.add_channel_to_table("text", channel.id, channel.name)
 
         logger.info(
             "Scheduled a game train at %s in channel %s for game: %s",
@@ -230,6 +228,67 @@ class GameTrainScheduler(commands.Cog):
             f"All set, game train will depart in {delay / 60:.2f} minutes,"
             f" at {run_time.strftime('%Y-%m-%d %H:%M:%S')}!"
         )
+
+    @commands.command(name="upcoming_trains")
+    async def upcoming_trains(
+        self,
+        ctx: commands.Context,
+        channel_id: Optional[int] = None,
+    ):
+        """
+        List the upcoming trains
+
+        Arguments:
+            ctx (commands.Context): context in which this command is called
+            channel_id (int, optional): the channel for which to check for trains
+
+        """
+        logger.info("Upcoming trains requested [%s]", channel_id)
+
+        # If channel is provided, only list upcoming trains in the given channel
+        channel = None
+        if channel_id is not None:
+            channel = self.bot.get_channel(int(channel_id))
+
+        if upcoming_trains := self.db.get_trains(
+            channel_name=channel.name if channel else None
+        ):
+            msg = [f"The next [{len(upcoming_trains)}] train(s) are: "]
+            for train in upcoming_trains:
+                train_id, game, channel_name, departure_datetime, _ = train
+                msg.append(
+                    f"* Train #{train_id} in {channel_name} departing at {departure_datetime}"
+                    f"{f' for {game}' if game else ''}"
+                )
+            await ctx.channel.send(
+                "\n".join(msg), delete_after=DEBUG_MSG_DURATION_SECONDS
+            )
+        else:
+            await ctx.channel.send("No upcoming trains!")
+
+    @commands.command(name="cancel_train")
+    async def cancel_train(self, ctx: commands.Context, train_id: int):
+        """
+        Cancel the given train
+
+        Arguments:
+            ctx (commands.Context): context in which this command is called
+            train_id (int): the train which should be cancelled
+
+        """
+        logger.info("Train cancellation requested [%s]", train_id)
+
+        if train_task := self._scheduled_train_tasks.get(train_id):
+            train_task.cancel()
+            self.db.remove_train(train_id)
+            await ctx.channel.send(
+                f"Removed train #{train_id} from the schedule",
+            )
+        else:
+            await ctx.channel.send(
+                f"No train with id {train_id} found",
+                delete_after=DEBUG_MSG_DURATION_SECONDS,
+            )
 
     @commands.command(name="train")
     async def launch_train_now(self, ctx: commands.Context, game: Optional[str] = None):

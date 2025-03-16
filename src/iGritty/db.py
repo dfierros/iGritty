@@ -277,10 +277,11 @@ class iGrittyDB:
 
         """
         if not isinstance(train_id, int):
-            logger.error(
-                "Provided train ID [%s] is not an integer, skipping removal", train_id
+            msg = (
+                "Provided train ID [%s] is not an integer, skipping removal" % train_id
             )
-            return
+            logger.error(msg)
+            raise TypeError(msg)
 
         with self._db_connect(detect_types=True):
             result = self.cursor.execute(
@@ -296,3 +297,4 @@ class iGrittyDB:
                 self.conn.commit()
             else:
                 logger.error("Cannot delete nonexistant train [%s]", train_id)
+                raise ValueError(f"No train with ID {train_id}")

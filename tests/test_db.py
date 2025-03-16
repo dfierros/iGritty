@@ -48,37 +48,81 @@ class TestiGrittyDB:
         tomorrow = right_now + datetime.timedelta(days=1)
         yesterday = right_now - datetime.timedelta(days=1)
 
-        example_db.add_train_to_table(
-            "Bad Rats",
-            "cool_channel",
-            in_an_hour,
-        )
+        assert example_db.get_trains() == []
 
-        # assert example_db.get_trains() == [
-        #     (1, "Bad Rats", "cool_channel", "2025-03-15T14:47:41.339052", "ONCE"),
-        # ]
-
-        example_db.add_train_to_table(
-            "Half Life 3",
-            "other_channel",
-            tomorrow,
-            "DAILY",
-        )
-
-        # assert example_db.get_trains() == [
-        #     (1, "Bad Rats", "cool_channel", "2025-03-15T14:47:41.339052", "ONCE"),
-        #     (2, "Half Life 3", "other_channel", "2025-03-16T13:47:41.339052", "DAILY"),
-        # ]
-
-        example_db.add_train_to_table(
-            "Dota 1",
-            "no channel",
-            yesterday,
-            "WEEKLY",
+        # First, try adding 3 items to the DB and reading them back
+        assert (
+            example_db.add_train_to_table(
+                "Bad Rats",
+                "cool_channel",
+                in_an_hour,
+            )
+            == 1
         )
 
         assert example_db.get_trains() == [
-            (3, "Dota 1", "no channel", yesterday.timestamp(), "WEEKLY"),
-            (1, "Bad Rats", "cool_channel", in_an_hour.timestamp(), "ONCE"),
-            (2, "Half Life 3", "other_channel", tomorrow.timestamp(), "DAILY"),
+            (1, "Bad Rats", "cool_channel", in_an_hour, "ONCE"),
         ]
+
+        assert (
+            example_db.add_train_to_table(
+                "Half Life 3",
+                "other_channel",
+                tomorrow,
+                "DAILY",
+            )
+            == 2
+        )
+
+        assert example_db.get_trains() == [
+            (1, "Bad Rats", "cool_channel", in_an_hour, "ONCE"),
+            (2, "Half Life 3", "other_channel", tomorrow, "DAILY"),
+        ]
+
+        assert (
+            example_db.add_train_to_table(
+                "Dota 1",
+                "no channel",
+                yesterday,
+                "WEEKLY",
+            )
+            == 3
+        )
+
+        assert example_db.get_trains() == [
+            (3, "Dota 1", "no channel", yesterday, "WEEKLY"),
+            (1, "Bad Rats", "cool_channel", in_an_hour, "ONCE"),
+            (2, "Half Life 3", "other_channel", tomorrow, "DAILY"),
+        ]
+
+        # Then, try removing 2 items from the DB
+        example_db.remove_train(1)
+
+        assert example_db.get_trains() == [
+            (3, "Dota 1", "no channel", yesterday, "WEEKLY"),
+            (2, "Half Life 3", "other_channel", tomorrow, "DAILY"),
+        ]
+
+        example_db.remove_train(3)
+
+        assert example_db.get_trains() == [
+            (2, "Half Life 3", "other_channel", tomorrow, "DAILY"),
+        ]
+
+        # Finally, try removing adding back 1 item to the DB
+        assert (
+            example_db.add_train_to_table("Hairspray", "pool_channel", tomorrow, "ONCE")
+            == 4
+        )
+
+        assert example_db.get_trains() == [
+            (2, "Half Life 3", "other_channel", tomorrow, "DAILY"),
+            (4, "Hairspray", "pool_channel", tomorrow, "ONCE"),
+        ]
+
+        # Invalid input testing
+        with pytest.raises(TypeError):
+            example_db.remove_train("string_input")
+
+        with pytest.raises(ValueError):
+            example_db.remove_train(123)
