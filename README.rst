@@ -59,7 +59,7 @@ Operation Manual
 
 Create a virtual environment and install iGritty and its dependencies
 
-.. code-block::
+.. code-block::bash
     # In iGritty clone directory...
     $> python -m venv .venv
     $> source .venv/bin/activate
@@ -69,7 +69,7 @@ Create a virtual environment and install iGritty and its dependencies
 
 Get a discord bot token and store in .env
 
-.. code-block::
+.. code-block::bash
     # In iGritty clone directory...
     echo "BOT_TOKEN=<your_token_here> > .env"
 
@@ -79,7 +79,7 @@ This token permits interactive discord server access, **Never share this token a
 
 Start the bot with the `launch` console script
 
-.. code-block::
+.. code-block::bash
     # In iGritty clone directory...
     $> source .venv/bin/activate
     (venv) $> launch
