@@ -7,7 +7,7 @@ import asyncio
 import datetime
 import logging
 from datetime import timedelta
-from typing import Optional
+from typing import Callable, Optional, Union
 from zoneinfo import ZoneInfo
 
 import discord
@@ -15,6 +15,7 @@ from discord.ext import commands
 
 from iGritty.common.params import DEBUG_MSG_DURATION_SECONDS
 from iGritty.db import iGrittyDB
+from iGritty.common.utils import SupportedTrainRecurrance
 
 DEFAULT_LEAD_TIME_MINS: int = 10
 TIMEZONE: ZoneInfo = ZoneInfo("America/New_York")
@@ -55,32 +56,68 @@ class GameTrainScheduler(commands.Cog):
             train_task.cancel()
         logger.info("Unloaded Game Train Schduler")
 
+    def _train_completion_callback_factory(self, train_id: int, reucrrance: SupportedTrainRecurrance) -> Callable:
+        """
+        Create a callback function to be executed when a train is launched
+
+        Arguments:
+            train_id (int): the train which has just run
+            recurrance (SupportedTrainRecurrance): the recurrance rule for this train
+
+        Returns:
+            Callable: function which should be called by closing coroutine
+
+        """
+
+        def _train_completion_callback(train_task: asyncio.Future):
+            """
+            Upon execution:
+            * Remove this train ID from the scheduled_train_tasks map
+            * If this train does not recur, remove from database
+
+            """
+            self._scheduled_train_tasks.pop(train_id)
+            if reucrrance == SupportedTrainRecurrance.ONCE:
+                self.db.remove_train(train_id)
+
+        return _train_completion_callback
+
     def _load_scheduled_trains(self):
         """
         Load scheduled trains from the database, removing any that have expired
 
         """
         for train in self.db.get_trains():
-            train_id, game, channel_name, departure_datetime, _ = train
+            train_id, game, channel_name, departure_datetime, recurrance = train
+            now = datetime.datetime.now()
 
-            # If this train is expired, remove from the DB and skip to the next train
-            if departure_datetime < datetime.datetime.now():
-                logger.warning("Removing expired scheduled train [%s]", train)
-                self.db.remove_train(train_id)
+            # If this train is expired...
+            if departure_datetime < now:
+                # ...and no recurrance, remove this train
+                if recurrance == SupportedTrainRecurrance.ONCE:
+                    logger.warning("Removing expired scheduled train [%s]", train)
+                    self.db.remove_train(train_id)
+                # ...and has recurrance, simply skip adding the task
+                else:
+                    logger.info("Skipping train which is past for today [%s]", train)
+
                 continue
+            # If this train has a daily recurrance, adjust the time to run today
+            elif recurrance == SupportedTrainRecurrance.DAILY:
+                logger.info("Updating daily scheduled train to run today [%s]", train)
+                departure_datetime.replace(year=now.year, month=now.month, day=now.day)
             else:
                 logger.info("Loading scheduled train [%s]", train)
 
             channel_id = self.db.get_id_for_channel("text", channel_name=channel_name)
 
             task = asyncio.create_task(
-                self.run_train_at_time(
-                    game=game, start_time=departure_datetime, channel_id=channel_id
-                )
+                self.run_train_at_time(game=game, start_time=departure_datetime, channel_id=channel_id)
             )
             self._scheduled_train_tasks[train_id] = task
+
             # Have this train remove itself from the scheduled train map upon completion
-            task.add_done_callback(lambda _: self._scheduled_train_tasks.pop(train_id))
+            task.add_done_callback(self._train_completion_callback_factory(train_id, recurrance))
 
     async def _train(
         self,
@@ -109,9 +146,7 @@ class GameTrainScheduler(commands.Cog):
         train_poll.add_answer(text="Yea")
         train_poll.add_answer(text="Nah")
 
-        departure_time = (datetime.datetime.now(tz=TIMEZONE) - lead_time).strftime(
-            "%I:%M %p"
-        )
+        departure_time = (datetime.datetime.now(tz=TIMEZONE) - lead_time).strftime("%I:%M %p")
 
         msg = f"Game Train departing in {lead_time.seconds // 60} minutes! (At {departure_time} EST)"
         if game_name:
@@ -129,9 +164,7 @@ class GameTrainScheduler(commands.Cog):
         now = datetime.datetime.now()
         await asyncio.sleep((time - now).total_seconds())
 
-    async def run_train_at_time(
-        self, game: str, start_time: datetime.datetime, channel_id: int
-    ):
+    async def run_train_at_time(self, game: str, start_time: datetime.datetime, channel_id: int):
         """
         Run a train at some time in the future
 
@@ -158,6 +191,7 @@ class GameTrainScheduler(commands.Cog):
         ctx: commands.Context,
         time_str: str,
         game: Optional[str] = None,
+        recurrance: Union[str, SupportedTrainRecurrance] = SupportedTrainRecurrance.ONCE,
         date_str: Optional[str] = None,
         channel_id: Optional[int] = None,
     ):
@@ -168,15 +202,17 @@ class GameTrainScheduler(commands.Cog):
             ctx (commands.Context): context in which this command is called
             time_str (str): The time to run the train, HH:MM format, must still be today
             game (str, optional): game for which to schedule the train
+            recurrance (str, optional): game for which to schedule the train
             date_str (str, optional): The date to run the train, DD/MM/YYYY format, must be in the future.
                 If not provided, assume today
             channel_id (int, optional): the channel in which to launch the train.
                 If not provided, assume the channel in which the command is called
 
         """
+        recurrance = SupportedTrainRecurrance(recurrance)
         logger.info(
             "Scheduled game train requested [%s]",
-            (game, time_str, date_str, channel_id),
+            (time_str, game, recurrance, date_str, channel_id),
         )
 
         # Get the date
@@ -185,9 +221,7 @@ class GameTrainScheduler(commands.Cog):
         else:
             date = datetime.datetime.strptime(date_str, "%d/%m/%Y")
 
-        run_time = datetime.datetime.strptime(time_str, "%H:%M").replace(
-            year=date.year, month=date.month, day=date.day
-        )
+        run_time = datetime.datetime.strptime(time_str, "%H:%M").replace(year=date.year, month=date.month, day=date.day)
 
         # Ensure that this train is scheduled for the future
         now = datetime.datetime.now()
@@ -208,26 +242,27 @@ class GameTrainScheduler(commands.Cog):
             await ctx.send(msg, delete_after=DEBUG_MSG_DURATION_SECONDS)
             logger.error(msg)
 
-        task = asyncio.create_task(
-            self.run_train_at_time(
-                game=game, start_time=run_time, channel_id=channel.id
-            )
-        )
+        task = asyncio.create_task(self.run_train_at_time(game=game, start_time=run_time, channel_id=channel.id))
 
-        train_id = self.db.add_train_to_table(game, channel.name, run_time)
+        train_id = self.db.add_train_to_table(game, channel.name, run_time, recurrance)
         self._scheduled_train_tasks[train_id] = task
         self.db.add_channel_to_table("text", channel.id, channel.name)
 
         logger.info(
-            "Scheduled a game train at %s in channel %s for game: %s",
+            "Scheduled a game train at %s in channel %s for game %s, recurrance %s",
             run_time.strftime("%Y-%m-%d %H:%M:%S"),
             channel,
             game,
+            recurrance,
         )
-        await ctx.channel.send(
-            f"All set, game train will depart in {delay / 60:.2f} minutes,"
-            f" at {run_time.strftime('%Y-%m-%d %H:%M:%S')}!"
+
+        msg = (
+            f"All set, game train will depart in {delay / 60:.2f} minutes, at {run_time.strftime('%Y-%m-%d %H:%M:%S')}!"
         )
+        if recurrance != SupportedTrainRecurrance.ONCE:
+            msg += f" (will repeat {recurrance.value.lower()})"
+
+        await ctx.channel.send(msg)
 
     @commands.command(name="upcoming_trains")
     async def upcoming_trains(
@@ -250,9 +285,7 @@ class GameTrainScheduler(commands.Cog):
         if channel_id is not None:
             channel = self.bot.get_channel(int(channel_id))
 
-        if upcoming_trains := self.db.get_trains(
-            channel_name=channel.name if channel else None
-        ):
+        if upcoming_trains := self.db.get_trains(channel_name=channel.name if channel else None):
             msg = [f"The next [{len(upcoming_trains)}] train(s) are: "]
             for train in upcoming_trains:
                 train_id, game, channel_name, departure_datetime, _ = train
@@ -260,9 +293,7 @@ class GameTrainScheduler(commands.Cog):
                     f"* Train #{train_id} in {channel_name} departing at {departure_datetime}"
                     f"{f' for {game}' if game else ''}"
                 )
-            await ctx.channel.send(
-                "\n".join(msg), delete_after=DEBUG_MSG_DURATION_SECONDS
-            )
+            await ctx.channel.send("\n".join(msg), delete_after=DEBUG_MSG_DURATION_SECONDS)
         else:
             await ctx.channel.send("No upcoming trains!")
 
