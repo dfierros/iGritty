@@ -84,4 +84,6 @@ async def version(ctx: commands.Context):
     )
 
 
-bot.run(API_KEY)
+def run():
+    """Console script entry point"""
+    bot.run(API_KEY)
