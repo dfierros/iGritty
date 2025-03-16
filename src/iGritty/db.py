@@ -136,9 +136,7 @@ class iGrittyDB:
             )
             self.conn.commit()
 
-    def get_channels(
-        self, channel_type: Union[str, SupportedChannelType]
-    ) -> List[tuple]:
+    def get_channels(self, channel_type: Union[str, SupportedChannelType]) -> List[tuple]:
         """
         Retrieve a list of all channels of the given type in the database
 
@@ -152,14 +150,10 @@ class iGrittyDB:
         channel_type = SupportedChannelType(channel_type)
         with self._db_connect():
             logger.debug("Get channels [%s]", channel_type)
-            result = self.cursor.execute(
-                f"SELECT id, channel_id, channel_name FROM {channel_type} ORDER BY id ASC"
-            )
+            result = self.cursor.execute(f"SELECT id, channel_id, channel_name FROM {channel_type} ORDER BY id ASC")
             return result.fetchall()
 
-    def get_id_for_channel(
-        self, channel_type: Union[str, SupportedChannelType], channel_name: str
-    ) -> Optional[int]:
+    def get_id_for_channel(self, channel_type: Union[str, SupportedChannelType], channel_name: str) -> Optional[int]:
         """
         Retrieve an ID which maps to the given channel name
 
@@ -207,9 +201,7 @@ class iGrittyDB:
         game: str,
         channel_name: str,
         departure_time: datetime,
-        recurrance: Union[
-            str, SupportedTrainRecurrance
-        ] = SupportedTrainRecurrance.ONCE,
+        recurrance: Union[str, SupportedTrainRecurrance] = SupportedTrainRecurrance.ONCE,
     ):
         """
         Add a new train to the train table
@@ -277,9 +269,7 @@ class iGrittyDB:
 
         """
         if not isinstance(train_id, int):
-            msg = (
-                "Provided train ID [%s] is not an integer, skipping removal" % train_id
-            )
+            msg = "Provided train ID [%s] is not an integer, skipping removal" % train_id
             logger.error(msg)
             raise TypeError(msg)
 
