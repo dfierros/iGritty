@@ -55,3 +55,6 @@ MANIFEST
 
 # Secrets
 .env
+
+# Databases
+*.db
