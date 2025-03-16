@@ -8,7 +8,6 @@ import logging
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from enum import auto
 from threading import Lock
 from typing import List, Optional, Union
 
@@ -22,24 +21,11 @@ from iGritty.common.db_utils import (
     convert_time,
     convert_timestamp,
 )
-from iGritty.common.utils import StrEnum
+from iGritty.common.utils import SupportedChannelType, SupportedTrainRecurrance
 
 DB_LOCK_TIMEOUT_SECONDS: int = 10
 
 logger = logging.getLogger("discord")
-
-
-class SupportedChannelType(StrEnum):
-    """Channel types supported for DB operations"""
-
-    TEXT = "text_channels"
-    VOICE = "voice_channels"
-
-
-class SupportedTrainRecurrance(StrEnum):
-    ONCE = auto()
-    WEEKLY = auto()
-    DAILY = auto()
 
 
 @dataclass
@@ -234,6 +220,9 @@ class iGrittyDB:
             departure_time (datetime): departure time of the train
             recurrance (str, SupportedTrainRecurrance): how often the train should be run. Default Once
 
+        Returns:
+            (int): the most recently added row ID
+
         """
         recurrance = SupportedTrainRecurrance(recurrance)
         with self._db_connect(detect_types=True):
@@ -250,6 +239,7 @@ class iGrittyDB:
                 (game, channel_name, departure_time, recurrance.value),
             )
             self.conn.commit()
+            return self.cursor.lastrowid
 
     def get_trains(self, channel_name: Optional[str] = None) -> List[tuple]:
         """
@@ -271,7 +261,7 @@ class iGrittyDB:
                 "SELECT id, game, channel_name, departure_datetime, recurrance"
                 " FROM scheduled_game_trains WHERE channel_name like (?)"
                 " ORDER BY departure_datetime ASC",
-                (channel_name if channel_name else "%"),
+                (channel_name if channel_name else "%",),
             )
             if output := result.fetchall():
                 return output
@@ -286,6 +276,12 @@ class iGrittyDB:
             train_id (int): unique identifier for the train to remove
 
         """
+        if not isinstance(train_id, int):
+            logger.error(
+                "Provided train ID [%s] is not an integer, skipping removal", train_id
+            )
+            return
+
         with self._db_connect(detect_types=True):
             result = self.cursor.execute(
                 "SELECT id FROM scheduled_game_trains WHERE id = (?)",

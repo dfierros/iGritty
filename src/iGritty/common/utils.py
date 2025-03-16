@@ -3,7 +3,7 @@ Common utils
 
 """
 
-from enum import Enum
+from enum import Enum, auto
 
 
 class StrEnum(str, Enum):
@@ -25,3 +25,16 @@ class StrEnum(str, Enum):
                 if member.name.lower() == value.lower():
                     return member
         super()._missing_(value)
+
+
+class SupportedChannelType(StrEnum):
+    """Channel types supported for DB operations"""
+
+    TEXT = "text_channels"
+    VOICE = "voice_channels"
+
+
+class SupportedTrainRecurrance(StrEnum):
+    ONCE = auto()
+    WEEKLY = auto()
+    DAILY = auto()
