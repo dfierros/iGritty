@@ -27,15 +27,13 @@
     :alt: Project generated with PyScaffold
     :target: https://pyscaffold.org/
 
+
+[![Project generated with PyScaffold](https://img.shields.io/badge/-PyScaffold-005CA0?logo=pyscaffold)](https://pyscaffold.org/)
 |
 
-========
-iGritty
-========
-
-
+# iGritty
+----------------
     Gritty is a discord bot!
-
 
 Simple discord bot which supports the following commands:
 
@@ -51,27 +49,29 @@ Simple discord bot which supports the following commands:
 
 `!version`` - print the bot version and exit
 
-----------------
-Operation Manual
-----------------
+
+## Operation Manual
+-------------------
 
 * Installation
 
 Create a virtual environment and install iGritty and its dependencies
 
-.. code-block::bash
-    # In iGritty clone directory...
-    $> python -m venv .venv
-    $> source .venv/bin/activate
-    (venv) $> pip install .
+```bash
+# In iGritty clone directory...
+$> python -m venv .venv
+$> source .venv/bin/activate
+(venv) $> pip install .
+```
 
 * Configuration
 
 Get a discord bot token and store in .env
 
-.. code-block::bash
-    # In iGritty clone directory...
-    echo "BOT_TOKEN=<your_token_here> > .env"
+```bash
+# In iGritty clone directory...
+echo "BOT_TOKEN=<your_token_here> > .env"
+```
 
 This token permits interactive discord server access, **Never share this token anywhere, with anyone**
 
@@ -79,12 +79,13 @@ This token permits interactive discord server access, **Never share this token a
 
 Start the bot with the `launch` console script
 
-.. code-block::bash
-    # In iGritty clone directory...
-    $> source .venv/bin/activate
-    (venv) $> launch
-    2025-03-16 18:55:53 INFO     discord.client logging in using static token
-    ...<snip>...
+```bash
+# In iGritty clone directory...
+$> source .venv/bin/activate
+(venv) $> launch
+2025-03-16 18:55:53 INFO     discord.client logging in using static token
+...<snip>...
+```
 
 * Logs
 
