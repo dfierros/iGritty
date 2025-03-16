@@ -57,7 +57,9 @@ Operation Manual
 
 * Installation
 
-Create a virtual environment and install iGritty and its dependencies::
+Create a virtual environment and install iGritty and its dependencies
+
+.. code-block::
     # In iGritty clone directory...
     $> python -m venv .venv
     $> source .venv/bin/activate
@@ -65,7 +67,9 @@ Create a virtual environment and install iGritty and its dependencies::
 
 * Configuration
 
-Get a discord bot token and store in .env::
+Get a discord bot token and store in .env
+
+.. code-block::
     # In iGritty clone directory...
     echo "BOT_TOKEN=<your_token_here> > .env"
 
@@ -73,7 +77,9 @@ This token permits interactive discord server access, **Never share this token a
 
 * Execution
 
-Start the bot with the `launch` console script::
+Start the bot with the `launch` console script
+
+.. code-block::
     # In iGritty clone directory...
     $> source .venv/bin/activate
     (venv) $> launch
