@@ -257,7 +257,8 @@ class GameTrainScheduler(commands.Cog):
         )
 
         msg = (
-            f"All set, game train will depart in {delay / 60:.2f} minutes, at {run_time.strftime('%Y-%m-%d %H:%M:%S')}!"
+            f"All set, game train will depart in {delay / 60:.2f} minutes,"
+            f" at {run_time.strftime('%Y-%m-%d %I:%M:%S%p')}!"
         )
         if recurrance != SupportedTrainRecurrance.ONCE:
             msg += f" (will repeat {recurrance.value.lower()})"

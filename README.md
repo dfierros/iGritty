@@ -12,6 +12,7 @@ Simple discord bot which supports the following commands:
   - time: time to run the train, HH:MM format
   - game: game for which this train runs
   - recurrance (optional): how often to repeat this train (ONCE or DAILY, default option is ONCE)
+  - date (optional): date to start the game train, DD/MM/YYYY format
 `!upcoming_trains` List all upcoming scheduled trains
 `!cancel_train <train_id>` Cancel given upcoming train
   - train_id: train id number, obtainable from `!upcoming_trains`
