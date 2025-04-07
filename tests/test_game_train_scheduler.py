@@ -103,3 +103,5 @@ class TestGameTrainScheduler:
         patch_discord.Poll.assert_called_once_with(question="You in?", duration=poll_duration)
         mock_poll.add_answer.assert_called()
         mock_channel.send.assert_awaited_once()
+        print("Current time ==>", (datetime.datetime.now()).strftime("%I:%M %p"))
+        print("Send message ==>", mock_channel.send.await_args[0])
