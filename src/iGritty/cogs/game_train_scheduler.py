@@ -146,7 +146,7 @@ class GameTrainScheduler(commands.Cog):
         train_poll.add_answer(text="Yea")
         train_poll.add_answer(text="Nah")
 
-        departure_time = (datetime.datetime.now(tz=TIMEZONE) - lead_time).strftime("%I:%M %p")
+        departure_time = (datetime.datetime.now(tz=TIMEZONE) + lead_time).strftime("%I:%M %p")
 
         msg = f"Game Train departing in {lead_time.seconds // 60} minutes! (At {departure_time} EST)"
         if game_name:
