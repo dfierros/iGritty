@@ -210,7 +210,7 @@ class GameTrainScheduler(commands.Cog):
         Schedule a game train for departure at a specific time
 
         Arguments:
-            time_str (str): The time to run the train, HH:MM format, must still be today
+            time_str (str): The time to run the train, HH:MM format
             game (str, optional): game for which to schedule the train
             recurrance (str, optional): game for which to schedule the train
             date_str (str, optional): The date to run the train, DD/MM/YYYY format, must be in the future.
@@ -237,9 +237,18 @@ class GameTrainScheduler(commands.Cog):
         now = datetime.datetime.now()
         delay = (run_time - now).total_seconds()
         if delay < 0:
-            msg = f"Cannot schedule train for the past ({run_time.strftime('%Y-%m-%d %H:%M:%S')})"
-            await ctx.send(msg)
-            logger.error(msg)
+            if recurrance == SupportedTrainRecurrance.ONCE:
+                msg = f"Cannot schedule one-time train for the past ({run_time.strftime('%Y-%m-%d %H:%M:%S')})"
+                await ctx.send(msg)
+                logger.error(msg)
+            elif recurrance == SupportedTrainRecurrance.DAILY:
+                await ctx.send(f"Train with {recurrance.lower()} recurrance will run for the first time tomorrow.")
+                run_time.day = run_time.day + 1
+            elif recurrance == SupportedTrainRecurrance.WEEKLY:
+                await ctx.send(f"Train with {recurrance.lower()} recurrance will run for the first time next week.")
+                run_time.day = run_time.day + 7
+            else:
+                raise NotImplementedError(f"No defined schedule behavior for {recurrance} recurrance")
 
         # Get the channel
         if channel_id is not None:
