@@ -337,7 +337,9 @@ class GameTrainScheduler(commands.Cog):
 
         Arguments:
             ctx (commands.Context): context in which this command is called
-            game (str, optional): game for which to run the train
+            game (str, optional): game for which to the train should run
+            custom_message (str, optional): overwrite the game train message with a given message
+            add_poll (book, optional): whether to add a poll to this train
 
         """
         logger.info("Launching user-requested game train for game %s", game)
