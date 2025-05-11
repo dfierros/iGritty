@@ -104,7 +104,7 @@ class GameTrainScheduler(commands.Cog):
 
                     # And adjust to tomorrow if we've missed the runtime for today
                     if next_runtime < now:
-                        next_runtime.replace(day=now.day + 1)
+                        next_runtime = next_runtime.replace(day=now.day + 1)
                         logger.info(
                             "Updating daily scheduled train to run tomorrow [%s] (%s)",
                             train,
