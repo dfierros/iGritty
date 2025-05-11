@@ -54,70 +54,83 @@ class TestiGrittyDB:
         assert (
             example_db.add_train_to_table(
                 "Bad Rats",
-                "cool_channel",
+                None,
+                False,
                 in_an_hour,
+                "cool_channel",
             )
             == 1
         )
 
         assert example_db.get_trains() == [
-            (1, "Bad Rats", "cool_channel", in_an_hour, "ONCE"),
+            (1, "Bad Rats", None, False, in_an_hour, "cool_channel", "ONCE"),
         ]
 
         assert (
             example_db.add_train_to_table(
                 "Half Life 3",
-                "other_channel",
+                "Poggo",
+                False,
                 tomorrow,
+                "other_channel",
                 "DAILY",
             )
             == 2
         )
 
         assert example_db.get_trains() == [
-            (1, "Bad Rats", "cool_channel", in_an_hour, "ONCE"),
-            (2, "Half Life 3", "other_channel", tomorrow, "DAILY"),
+            (1, "Bad Rats", None, False, in_an_hour, "cool_channel", "ONCE"),
+            (2, "Half Life 3", "Poggo", False, tomorrow, "other_channel", "DAILY"),
         ]
 
         assert (
             example_db.add_train_to_table(
                 "Dota 1",
-                "no channel",
+                None,
+                True,
                 yesterday,
+                "no channel",
                 "WEEKLY",
             )
             == 3
         )
 
         assert example_db.get_trains() == [
-            (3, "Dota 1", "no channel", yesterday, "WEEKLY"),
-            (1, "Bad Rats", "cool_channel", in_an_hour, "ONCE"),
-            (2, "Half Life 3", "other_channel", tomorrow, "DAILY"),
+            (3, "Dota 1", None, True, yesterday, "no channel", "WEEKLY"),
+            (1, "Bad Rats", None, False, in_an_hour, "cool_channel", "ONCE"),
+            (2, "Half Life 3", "Poggo", False, tomorrow, "other_channel", "DAILY"),
         ]
 
         # Then, try removing 2 items from the DB
         example_db.remove_train(1)
 
         assert example_db.get_trains() == [
-            (3, "Dota 1", "no channel", yesterday, "WEEKLY"),
-            (2, "Half Life 3", "other_channel", tomorrow, "DAILY"),
+            (3, "Dota 1", None, True, yesterday, "no channel", "WEEKLY"),
+            (2, "Half Life 3", "Poggo", False, tomorrow, "other_channel", "DAILY"),
         ]
 
         example_db.remove_train(3)
 
         assert example_db.get_trains() == [
-            (2, "Half Life 3", "other_channel", tomorrow, "DAILY"),
+            (2, "Half Life 3", "Poggo", False, tomorrow, "other_channel", "DAILY"),
         ]
 
         # Finally, try removing adding back 1 item to the DB
         assert (
-            example_db.add_train_to_table("Hairspray", "pool_channel", tomorrow, "ONCE")
+            example_db.add_train_to_table(
+                "Hairspray",
+                "The musical",
+                True,
+                tomorrow,
+                "pool_channel",
+                "ONCE",
+            )
             == 4
         )
 
         assert example_db.get_trains() == [
-            (2, "Half Life 3", "other_channel", tomorrow, "DAILY"),
-            (4, "Hairspray", "pool_channel", tomorrow, "ONCE"),
+            (2, "Half Life 3", "Poggo", False, tomorrow, "other_channel", "DAILY"),
+            (4, "Hairspray", "The musical", True, tomorrow, "pool_channel", "ONCE"),
         ]
 
         # Invalid input testing

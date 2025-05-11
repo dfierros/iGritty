@@ -13,9 +13,8 @@ from zoneinfo import ZoneInfo
 import discord
 from discord.ext import commands
 
-from iGritty.common.params import DEBUG_MSG_DURATION_SECONDS
-from iGritty.db import iGrittyDB
 from iGritty.common.utils import SupportedTrainRecurrance
+from iGritty.db import iGrittyDB
 
 DEFAULT_LEAD_TIME_MINS: int = 10
 TIMEZONE: ZoneInfo = ZoneInfo("America/New_York")
@@ -87,32 +86,55 @@ class GameTrainScheduler(commands.Cog):
         Load scheduled trains from the database, removing any that have expired
 
         """
-        for train in self.db.get_trains():
-            train_id, game, channel_name, departure_datetime, recurrance = train
-            now = datetime.datetime.now()
+        now = datetime.datetime.now()
 
-            # If this train is expired...
+        for train in self.db.get_trains():
+            train_id, game, custom_message, add_poll, departure_datetime, channel_name, recurrance = train
+
+            # If this train is expired ...
             if departure_datetime < now:
-                # ...and no recurrance, remove this train
+                # ... and has no recurrance, remove
                 if recurrance == SupportedTrainRecurrance.ONCE:
                     logger.warning("Removing expired scheduled train [%s]", train)
                     self.db.remove_train(train_id)
-                # ...and has recurrance, simply skip adding the task
-                else:
-                    logger.info("Skipping train which is past for today [%s]", train)
+                # ... and has daily recurrance...
+                elif recurrance == SupportedTrainRecurrance.DAILY:
+                    # Update the next runtime to today
+                    next_runtime = departure_datetime.replace(year=now.year, month=now.month, day=now.day)
 
-                continue
-            # If this train has a daily recurrance, adjust the time to run today
-            elif recurrance == SupportedTrainRecurrance.DAILY:
-                logger.info("Updating daily scheduled train to run today [%s]", train)
-                departure_datetime.replace(year=now.year, month=now.month, day=now.day)
+                    # And adjust to tomorrow if we've missed the runtime for today
+                    if next_runtime < now:
+                        next_runtime = next_runtime.replace(day=now.day + 1)
+                        logger.info(
+                            "Updating daily scheduled train to run tomorrow [%s] (%s)",
+                            train,
+                            next_runtime.strftime("%a %d %b %Y, %I:%M%p"),
+                        )
+                    else:
+                        logger.info(
+                            "Updating daily scheduled train to run today [%s] (%s)",
+                            train,
+                            next_runtime.strftime("%a %d %b %Y, %I:%M%p"),
+                        )
+
+                    departure_datetime = next_runtime
+                elif recurrance == SupportedTrainRecurrance.WEEKLY:
+                    # Update the next runtime to this month
+                    # TODO: This makes the recurrance sorta behave like monthly, should fix
+                    departure_datetime = departure_datetime.replace(year=now.year, month=now.month)
             else:
                 logger.info("Loading scheduled train [%s]", train)
 
             channel_id = self.db.get_id_for_channel("text", channel_name=channel_name)
 
             task = asyncio.create_task(
-                self.run_train_at_time(game=game, start_time=departure_datetime, channel_id=channel_id)
+                self.run_train_at_time(
+                    game=game,
+                    custom_message=custom_message,
+                    add_poll=add_poll,
+                    start_time=departure_datetime,
+                    channel_id=channel_id,
+                )
             )
             self._scheduled_train_tasks[train_id] = task
 
@@ -122,36 +144,48 @@ class GameTrainScheduler(commands.Cog):
     async def _train(
         self,
         channel_id: int,
-        game_name: Optional[str] = None,
         lead_time: timedelta = datetime.timedelta(minutes=DEFAULT_LEAD_TIME_MINS),
-        poll_duration: timedelta = datetime.timedelta(hours=1),
+        add_poll: bool = False,
+        game_name: Optional[str] = None,
+        custom_message: Optional[str] = None,
     ):
         """
         Helper method which launches the train
 
         Arguments:
             channel_id (int): channel at which the train departure should be announced
-            game_name (str, optional): the name of the game for the train
             lead_time (timedelta): how long from now the train should depart
-            poll_duration (timedelta): how long the train poll should run
-
+            add_poll (bool): whether to include a poll with the train, default False
+            game_name (str, optional): the name of the game for the train
+            custom_message (str, optional): whether to use a custom train message, default auto-generated
         """
         channel = self.bot.get_channel(channel_id)
-        logger.info("Should send message to channel: %s", channel)
-
-        train_poll = discord.Poll(
-            question="You in?",
-            duration=poll_duration,
-        )
-        train_poll.add_answer(text="Yea")
-        train_poll.add_answer(text="Nah")
+        logger.info("Should send %s train to channel: %s", channel)
 
         departure_time = (datetime.datetime.now(tz=TIMEZONE) + lead_time).strftime("%I:%M %p")
 
-        msg = f"Game Train departing in {lead_time.seconds // 60} minutes! (At {departure_time} EST)"
+        # Start with custom message, if provided
+        if custom_message:
+            msg = custom_message
+        else:
+            msg = f"Game Train departing in {lead_time.seconds // 60} minutes!"
+
+        # Append game name time prefix, if provided
         if game_name:
             msg = f"[{game_name}] {msg}"
-        await channel.send(msg, poll=train_poll)
+
+        # Append departure time suffix
+        msg = f"{msg} (At {departure_time} EST)"
+
+        if add_poll:
+            train_poll = discord.Poll(
+                question="You in?",
+                duration=datetime.timedelta(hours=1),  # Polls have a minimum duration of 1 hour
+            )
+            train_poll.add_answer(text="Yea")
+            train_poll.add_answer(text="Nah")
+
+        await channel.send(msg, poll=train_poll if add_poll else None)
 
     async def wait_until(self, time: datetime.datetime):
         """
@@ -164,12 +198,21 @@ class GameTrainScheduler(commands.Cog):
         now = datetime.datetime.now()
         await asyncio.sleep((time - now).total_seconds())
 
-    async def run_train_at_time(self, game: str, start_time: datetime.datetime, channel_id: int):
+    async def run_train_at_time(
+        self,
+        game: str,
+        custom_message: str,
+        add_poll: bool,
+        start_time: datetime.datetime,
+        channel_id: int,
+    ):
         """
         Run a train at some time in the future
 
         Arguments:
             game (str): game for which the train should run
+            custom_message (str): overwrite the game train message with a given message
+            add_poll (bool): whether to add a poll to this train
             start_time (datetime.datetime): time at which the train should depart
             channel_id (int): channel on which the train should run
 
@@ -178,7 +221,12 @@ class GameTrainScheduler(commands.Cog):
             logger.error("Cannot schedule past train at %s", start_time)
         else:
             await self.wait_until(start_time)
-            await self._train(channel_id=channel_id, game_name=game)
+            await self._train(
+                channel_id=channel_id,
+                game_name=game,
+                custom_message=custom_message,
+                add_poll=add_poll,
+            )
             logger.info("Scheduled train complete")
 
     # --------------------
@@ -191,6 +239,8 @@ class GameTrainScheduler(commands.Cog):
         ctx: commands.Context,
         time_str: str,
         game: Optional[str] = None,
+        custom_message: Optional[str] = None,
+        add_poll: bool = False,
         recurrance: Union[str, SupportedTrainRecurrance] = SupportedTrainRecurrance.ONCE,
         date_str: Optional[str] = None,
         channel_id: Optional[int] = None,
@@ -199,8 +249,7 @@ class GameTrainScheduler(commands.Cog):
         Schedule a game train for departure at a specific time
 
         Arguments:
-            ctx (commands.Context): context in which this command is called
-            time_str (str): The time to run the train, HH:MM format, must still be today
+            time_str (str): The time to run the train, HH:MM format
             game (str, optional): game for which to schedule the train
             recurrance (str, optional): game for which to schedule the train
             date_str (str, optional): The date to run the train, DD/MM/YYYY format, must be in the future.
@@ -212,7 +261,7 @@ class GameTrainScheduler(commands.Cog):
         recurrance = SupportedTrainRecurrance(recurrance)
         logger.info(
             "Scheduled game train requested [%s]",
-            (time_str, game, recurrance, date_str, channel_id),
+            (time_str, game, custom_message, add_poll, recurrance, date_str, channel_id),
         )
 
         # Get the date
@@ -227,9 +276,18 @@ class GameTrainScheduler(commands.Cog):
         now = datetime.datetime.now()
         delay = (run_time - now).total_seconds()
         if delay < 0:
-            msg = f"Cannot schedule train for the past ({run_time.strftime('%Y-%m-%d %H:%M:%S')})"
-            await ctx.send(msg, delete_after=DEBUG_MSG_DURATION_SECONDS)
-            logger.error(msg)
+            if recurrance == SupportedTrainRecurrance.ONCE:
+                msg = f"Cannot schedule one-time train for the past ({run_time.strftime('%Y-%m-%d %H:%M:%S')})"
+                await ctx.send(msg)
+                logger.error(msg)
+            elif recurrance == SupportedTrainRecurrance.DAILY:
+                await ctx.send(f"Train with {recurrance.lower()} recurrance will run for the first time tomorrow.")
+                run_time.day = run_time.day + 1
+            elif recurrance == SupportedTrainRecurrance.WEEKLY:
+                await ctx.send(f"Train with {recurrance.lower()} recurrance will run for the first time next week.")
+                run_time.day = run_time.day + 7
+            else:
+                raise NotImplementedError(f"No defined schedule behavior for {recurrance} recurrance")
 
         # Get the channel
         if channel_id is not None:
@@ -239,12 +297,28 @@ class GameTrainScheduler(commands.Cog):
 
         if channel is None:
             msg = "Unable to determine channel to run train"
-            await ctx.send(msg, delete_after=DEBUG_MSG_DURATION_SECONDS)
+            await ctx.send(msg)
             logger.error(msg)
 
-        task = asyncio.create_task(self.run_train_at_time(game=game, start_time=run_time, channel_id=channel.id))
+        task = asyncio.create_task(
+            self.run_train_at_time(
+                game=game,
+                custom_message=custom_message,
+                add_poll=add_poll,
+                start_time=run_time,
+                channel_id=channel.id,
+            )
+        )
 
-        train_id = self.db.add_train_to_table(game, channel.name, run_time, recurrance)
+        train_id = self.db.add_train_to_table(
+            game=game,
+            custom_message=custom_message,
+            add_poll=add_poll,
+            departure_time=run_time,
+            channel_name=channel.name,
+            recurrance=recurrance,
+        )
+
         self._scheduled_train_tasks[train_id] = task
         self.db.add_channel_to_table("text", channel.id, channel.name)
 
@@ -274,7 +348,6 @@ class GameTrainScheduler(commands.Cog):
         List the upcoming trains
 
         Arguments:
-            ctx (commands.Context): context in which this command is called
             channel_id (int, optional): the channel for which to check for trains
 
         """
@@ -288,12 +361,12 @@ class GameTrainScheduler(commands.Cog):
         if upcoming_trains := self.db.get_trains(channel_name=channel.name if channel else None):
             msg = [f"The next [{len(upcoming_trains)}] train(s) are: "]
             for train in upcoming_trains:
-                train_id, game, channel_name, departure_datetime, _ = train
+                train_id, game, _, _, departure_datetime, channel_name, _ = train
                 msg.append(
                     f"* Train #{train_id} in {channel_name} departing at {departure_datetime}"
                     f"{f' for {game}' if game else ''}"
                 )
-            await ctx.channel.send("\n".join(msg), delete_after=DEBUG_MSG_DURATION_SECONDS)
+            await ctx.channel.send("\n".join(msg))
         else:
             await ctx.channel.send("No upcoming trains!")
 
@@ -303,7 +376,6 @@ class GameTrainScheduler(commands.Cog):
         Cancel the given train
 
         Arguments:
-            ctx (commands.Context): context in which this command is called
             train_id (int): the train which should be cancelled
 
         """
@@ -316,20 +388,29 @@ class GameTrainScheduler(commands.Cog):
                 f"Removed train #{train_id} from the schedule",
             )
         else:
-            await ctx.channel.send(
-                f"No train with id {train_id} found",
-                delete_after=DEBUG_MSG_DURATION_SECONDS,
-            )
+            await ctx.channel.send(f"No train with id {train_id} found")
 
     @commands.command(name="train")
-    async def launch_train_now(self, ctx: commands.Context, game: Optional[str] = None):
+    async def launch_train_now(
+        self,
+        ctx: commands.Context,
+        game: Optional[str] = None,
+        custom_message: Optional[str] = None,
+        add_poll: bool = False,
+    ):
         """
         Launch the game train now in this channel
 
         Arguments:
-            ctx (commands.Context): context in which this command is called
-            game (str, optional): game for which to run the train
+            game (str, optional): game for which the train should run
+            custom_message (str, optional): overwrite the game train message with a given message
+            add_poll (bool, optional): whether to add a poll to this train
 
         """
         logger.info("Launching user-requested game train for game %s", game)
-        await self._train(channel_id=ctx.channel.id, game_name=game)
+        await self._train(
+            channel_id=ctx.channel.id,
+            game_name=game,
+            custom_message=custom_message,
+            add_poll=add_poll,
+        )

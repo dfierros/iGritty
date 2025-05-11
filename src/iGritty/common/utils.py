@@ -26,6 +26,9 @@ class StrEnum(str, Enum):
                     return member
         super()._missing_(value)
 
+    def __str__(self):
+        return self.value
+
 
 class SupportedChannelType(StrEnum):
     """Channel types supported for DB operations"""
