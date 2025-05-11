@@ -13,9 +13,8 @@ from zoneinfo import ZoneInfo
 import discord
 from discord.ext import commands
 
-from iGritty.common.params import DEBUG_MSG_DURATION_SECONDS
-from iGritty.db import iGrittyDB
 from iGritty.common.utils import SupportedTrainRecurrance
+from iGritty.db import iGrittyDB
 
 DEFAULT_LEAD_TIME_MINS: int = 10
 TIMEZONE: ZoneInfo = ZoneInfo("America/New_York")
@@ -235,7 +234,7 @@ class GameTrainScheduler(commands.Cog):
         delay = (run_time - now).total_seconds()
         if delay < 0:
             msg = f"Cannot schedule train for the past ({run_time.strftime('%Y-%m-%d %H:%M:%S')})"
-            await ctx.send(msg, delete_after=DEBUG_MSG_DURATION_SECONDS)
+            await ctx.send(msg)
             logger.error(msg)
 
         # Get the channel
@@ -246,7 +245,7 @@ class GameTrainScheduler(commands.Cog):
 
         if channel is None:
             msg = "Unable to determine channel to run train"
-            await ctx.send(msg, delete_after=DEBUG_MSG_DURATION_SECONDS)
+            await ctx.send(msg)
             logger.error(msg)
 
         task = asyncio.create_task(self.run_train_at_time(game=game, start_time=run_time, channel_id=channel.id))
@@ -300,7 +299,7 @@ class GameTrainScheduler(commands.Cog):
                     f"* Train #{train_id} in {channel_name} departing at {departure_datetime}"
                     f"{f' for {game}' if game else ''}"
                 )
-            await ctx.channel.send("\n".join(msg), delete_after=DEBUG_MSG_DURATION_SECONDS)
+            await ctx.channel.send("\n".join(msg))
         else:
             await ctx.channel.send("No upcoming trains!")
 
@@ -323,10 +322,7 @@ class GameTrainScheduler(commands.Cog):
                 f"Removed train #{train_id} from the schedule",
             )
         else:
-            await ctx.channel.send(
-                f"No train with id {train_id} found",
-                delete_after=DEBUG_MSG_DURATION_SECONDS,
-            )
+            await ctx.channel.send(f"No train with id {train_id} found")
 
     @commands.command(name="train")
     async def launch_train_now(
