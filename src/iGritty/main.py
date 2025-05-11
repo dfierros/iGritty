@@ -43,13 +43,16 @@ logger.addHandler(handler)
 load_dotenv()
 API_KEY = os.getenv("BOT_TOKEN")
 DESCRIPTION = "Gritty is trapped in a Discord Bot!"
+help_command = commands.DefaultHelpCommand(show_parameter_descriptions=False)
 
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
 
+
 bot = commands.Bot(
     command_prefix="!",
+    help_command=help_command,
     description=DESCRIPTION,
     intents=intents,
 )
