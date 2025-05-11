@@ -2,6 +2,16 @@
 Changelog
 =========
 
+Version 1.1.0
+===========
+- Fixing scheduled trains not working properly due to database reloads
+  - Resolves https://github.com/dfierros/iGritty/issues/3
+- Reworked `!train`
+  - Users can now provide a custom train message
+  - Polls on trains are now optional
+- Reworked `!schedule_train`
+  - Added support for custom train message & optional poll (from `!train`) 
+
 Version 1.0.1
 ===========
 
