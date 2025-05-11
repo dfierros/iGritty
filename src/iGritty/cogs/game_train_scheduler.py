@@ -86,25 +86,42 @@ class GameTrainScheduler(commands.Cog):
         Load scheduled trains from the database, removing any that have expired
 
         """
+        now = datetime.datetime.now()
+
         for train in self.db.get_trains():
             train_id, game, channel_name, departure_datetime, recurrance = train
-            now = datetime.datetime.now()
 
-            # If this train is expired...
+            # If this train is expired ...
             if departure_datetime < now:
-                # ...and no recurrance, remove this train
+                # ... and has no recurrance, remove
                 if recurrance == SupportedTrainRecurrance.ONCE:
                     logger.warning("Removing expired scheduled train [%s]", train)
                     self.db.remove_train(train_id)
-                # ...and has recurrance, simply skip adding the task
-                else:
-                    logger.info("Skipping train which is past for today [%s]", train)
+                # ... and has daily recurrance...
+                elif recurrance == SupportedTrainRecurrance.DAILY:
+                    # Update the next runtime to today
+                    next_runtime = departure_datetime.replace(year=now.year, month=now.month, day=now.day)
 
-                continue
-            # If this train has a daily recurrance, adjust the time to run today
-            elif recurrance == SupportedTrainRecurrance.DAILY:
-                logger.info("Updating daily scheduled train to run today [%s]", train)
-                departure_datetime.replace(year=now.year, month=now.month, day=now.day)
+                    # And adjust to tomorrow if we've missed the runtime for today
+                    if next_runtime < now:
+                        next_runtime.replace(day=now.day + 1)
+                        logger.info(
+                            "Updating daily scheduled train to run tomorrow [%s] (%s)",
+                            train,
+                            next_runtime.strftime("%a %d %b %Y, %I:%M%p"),
+                        )
+                    else:
+                        logger.info(
+                            "Updating daily scheduled train to run today [%s] (%s)",
+                            train,
+                            next_runtime.strftime("%a %d %b %Y, %I:%M%p"),
+                        )
+
+                    departure_datetime = next_runtime
+                elif recurrance == SupportedTrainRecurrance.WEEKLY:
+                    # Update the next runtime to this month
+                    # TODO: This makes the recurrance sorta behave like monthly, should fix
+                    departure_datetime = departure_datetime.replace(year=now.year, month=now.month)
             else:
                 logger.info("Loading scheduled train [%s]", train)
 
