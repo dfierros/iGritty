@@ -16,7 +16,6 @@ from dotenv import load_dotenv
 
 from iGritty import __version__ as bot_version
 from iGritty.cogs.game_train_scheduler import GameTrainScheduler
-from iGritty.common.params import DEBUG_MSG_DURATION_SECONDS
 from iGritty.db import iGrittyDB
 
 # -------------
@@ -74,14 +73,11 @@ async def on_ready():
 @bot.command()
 async def version(ctx: commands.Context):
     """
-    Retrieve the bot version (message is removed after 10 seconds)
+    Retrieve the bot version
 
     """
     logger.info("Version requested [%s]", bot_version)
-    await ctx.send(
-        f"iGritty Discord Bot version {bot_version}",
-        delete_after=DEBUG_MSG_DURATION_SECONDS,
-    )
+    await ctx.send(f"iGritty Discord Bot version {bot_version}")
 
 
 def run():
