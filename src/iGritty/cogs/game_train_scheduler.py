@@ -141,13 +141,18 @@ class GameTrainScheduler(commands.Cog):
 
         departure_time = (datetime.datetime.now(tz=TIMEZONE) + lead_time).strftime("%I:%M %p")
 
+        # Start with custom message, if provided
         if custom_message:
             msg = custom_message
         else:
-            msg = f"Game Train departing in {lead_time.seconds // 60} minutes! (At {departure_time} EST)"
+            msg = f"Game Train departing in {lead_time.seconds // 60} minutes!"
 
+        # Append game name time prefix, if provided
         if game_name:
             msg = f"[{game_name}] {msg}"
+
+        # Append departure time suffix
+        msg = f"{msg} (At {departure_time} EST)"
 
         if add_poll:
             train_poll = discord.Poll(
