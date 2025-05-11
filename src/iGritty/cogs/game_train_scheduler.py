@@ -122,36 +122,43 @@ class GameTrainScheduler(commands.Cog):
     async def _train(
         self,
         channel_id: int,
-        game_name: Optional[str] = None,
         lead_time: timedelta = datetime.timedelta(minutes=DEFAULT_LEAD_TIME_MINS),
-        poll_duration: timedelta = datetime.timedelta(hours=1),
+        add_poll: bool = False,
+        game_name: Optional[str] = None,
+        custom_message: Optional[str] = None,
     ):
         """
         Helper method which launches the train
 
         Arguments:
             channel_id (int): channel at which the train departure should be announced
-            game_name (str, optional): the name of the game for the train
             lead_time (timedelta): how long from now the train should depart
-            poll_duration (timedelta): how long the train poll should run
-
+            add_poll (bool): whether to include a poll with the train, default False
+            game_name (str, optional): the name of the game for the train
+            custom_message (str, optional): whether to use a custom train message, default auto-generated
         """
         channel = self.bot.get_channel(channel_id)
-        logger.info("Should send message to channel: %s", channel)
-
-        train_poll = discord.Poll(
-            question="You in?",
-            duration=poll_duration,
-        )
-        train_poll.add_answer(text="Yea")
-        train_poll.add_answer(text="Nah")
+        logger.info("Should send %s train to channel: %s", channel)
 
         departure_time = (datetime.datetime.now(tz=TIMEZONE) + lead_time).strftime("%I:%M %p")
 
-        msg = f"Game Train departing in {lead_time.seconds // 60} minutes! (At {departure_time} EST)"
+        if custom_message:
+            msg = custom_message
+        else:
+            msg = f"Game Train departing in {lead_time.seconds // 60} minutes! (At {departure_time} EST)"
+
         if game_name:
             msg = f"[{game_name}] {msg}"
-        await channel.send(msg, poll=train_poll)
+
+        if add_poll:
+            train_poll = discord.Poll(
+                question="You in?",
+                duration=datetime.timedelta(hours=1),  # Polls have a minimum duration of 1 hour
+            )
+            train_poll.add_answer(text="Yea")
+            train_poll.add_answer(text="Nah")
+
+        await channel.send(msg, poll=train_poll if add_poll else None)
 
     async def wait_until(self, time: datetime.datetime):
         """
@@ -322,7 +329,13 @@ class GameTrainScheduler(commands.Cog):
             )
 
     @commands.command(name="train")
-    async def launch_train_now(self, ctx: commands.Context, game: Optional[str] = None):
+    async def launch_train_now(
+        self,
+        ctx: commands.Context,
+        game: Optional[str] = None,
+        custom_message: Optional[str] = None,
+        add_poll: bool = False,
+    ):
         """
         Launch the game train now in this channel
 
@@ -332,4 +345,9 @@ class GameTrainScheduler(commands.Cog):
 
         """
         logger.info("Launching user-requested game train for game %s", game)
-        await self._train(channel_id=ctx.channel.id, game_name=game)
+        await self._train(
+            channel_id=ctx.channel.id,
+            game_name=game,
+            custom_message=custom_message,
+            add_poll=add_poll,
+        )
