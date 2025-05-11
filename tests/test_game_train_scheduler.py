@@ -69,21 +69,47 @@ class TestGameTrainScheduler:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
-        "channel_id, game_name, lead_time, poll_duration",
+        "channel_id, lead_time, add_poll, game_name, custom_message",
         [
             pytest.param(
                 1,
-                "game_name",
                 datetime.timedelta(minutes=10),
-                datetime.timedelta(hours=1),
-                id="GAME_NAME_GIVEN",
+                False,
+                None,
+                None,
+                id="DEFAULT_BEHAVIOR",
             ),
             pytest.param(
                 1,
-                None,
                 datetime.timedelta(minutes=10),
-                datetime.timedelta(hours=1),
-                id="NO_GAME_NAME",
+                True,
+                None,
+                None,
+                id="POLL_PROVIDED",
+            ),
+            pytest.param(
+                1,
+                datetime.timedelta(minutes=10),
+                False,
+                "Bad Rats",
+                None,
+                id="GAME_PROVIDED",
+            ),
+            pytest.param(
+                1,
+                datetime.timedelta(minutes=10),
+                False,
+                None,
+                "Foo Bar",
+                id="CUSTOM_MESSAGE_PROVIDED",
+            ),
+            pytest.param(
+                1,
+                datetime.timedelta(minutes=10),
+                True,
+                "Bad Rats",
+                "Foo Bar",
+                id="ALL_PARAMS_PROVIDED",
             ),
         ],
     )
@@ -94,14 +120,19 @@ class TestGameTrainScheduler:
         mock_train_scheduler,
         mock_channel,
         channel_id,
-        game_name,
         lead_time,
-        poll_duration,
+        add_poll,
+        game_name,
+        custom_message,
     ):
-        await mock_train_scheduler._train(channel_id, game_name, lead_time, poll_duration)
+        await mock_train_scheduler._train(channel_id, lead_time, add_poll, game_name, custom_message)
 
-        patch_discord.Poll.assert_called_once_with(question="You in?", duration=poll_duration)
-        mock_poll.add_answer.assert_called()
+        if add_poll:
+            patch_discord.Poll.assert_called_once_with(question="You in?", duration=datetime.timedelta(hours=1))
+            mock_poll.add_answer.assert_called()
+        else:
+            patch_discord.Poll.assert_not_called()
+
         mock_channel.send.assert_awaited_once()
         print("Current time ==>", (datetime.datetime.now()).strftime("%I:%M %p"))
         print("Send message ==>", mock_channel.send.await_args[0])
