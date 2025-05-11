@@ -205,7 +205,6 @@ class GameTrainScheduler(commands.Cog):
         Schedule a game train for departure at a specific time
 
         Arguments:
-            ctx (commands.Context): context in which this command is called
             time_str (str): The time to run the train, HH:MM format, must still be today
             game (str, optional): game for which to schedule the train
             recurrance (str, optional): game for which to schedule the train
@@ -280,7 +279,6 @@ class GameTrainScheduler(commands.Cog):
         List the upcoming trains
 
         Arguments:
-            ctx (commands.Context): context in which this command is called
             channel_id (int, optional): the channel for which to check for trains
 
         """
@@ -309,7 +307,6 @@ class GameTrainScheduler(commands.Cog):
         Cancel the given train
 
         Arguments:
-            ctx (commands.Context): context in which this command is called
             train_id (int): the train which should be cancelled
 
         """
@@ -336,10 +333,9 @@ class GameTrainScheduler(commands.Cog):
         Launch the game train now in this channel
 
         Arguments:
-            ctx (commands.Context): context in which this command is called
-            game (str, optional): game for which to the train should run
+            game (str, optional): game for which the train should run
             custom_message (str, optional): overwrite the game train message with a given message
-            add_poll (book, optional): whether to add a poll to this train
+            add_poll (bool, optional): whether to add a poll to this train
 
         """
         logger.info("Launching user-requested game train for game %s", game)
