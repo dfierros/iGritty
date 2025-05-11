@@ -355,7 +355,7 @@ class GameTrainScheduler(commands.Cog):
         if upcoming_trains := self.db.get_trains(channel_name=channel.name if channel else None):
             msg = [f"The next [{len(upcoming_trains)}] train(s) are: "]
             for train in upcoming_trains:
-                train_id, game, channel_name, departure_datetime, _ = train
+                train_id, game, _, _, departure_datetime, channel_name, _ = train
                 msg.append(
                     f"* Train #{train_id} in {channel_name} departing at {departure_datetime}"
                     f"{f' for {game}' if game else ''}"
