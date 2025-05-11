@@ -89,7 +89,7 @@ class GameTrainScheduler(commands.Cog):
         now = datetime.datetime.now()
 
         for train in self.db.get_trains():
-            train_id, game, channel_name, departure_datetime, recurrance = train
+            train_id, game, custom_message, add_poll, departure_datetime, channel_name, recurrance = train
 
             # If this train is expired ...
             if departure_datetime < now:
@@ -128,7 +128,13 @@ class GameTrainScheduler(commands.Cog):
             channel_id = self.db.get_id_for_channel("text", channel_name=channel_name)
 
             task = asyncio.create_task(
-                self.run_train_at_time(game=game, start_time=departure_datetime, channel_id=channel_id)
+                self.run_train_at_time(
+                    game=game,
+                    custom_message=custom_message,
+                    add_poll=add_poll,
+                    start_time=departure_datetime,
+                    channel_id=channel_id,
+                )
             )
             self._scheduled_train_tasks[train_id] = task
 
