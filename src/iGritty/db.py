@@ -189,8 +189,10 @@ class iGrittyDB:
                 CREATE TABLE IF NOT EXISTS scheduled_game_trains (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     game TEXT,
-                    channel_name TEXT NOT NULL,
+                    custom_message TEXT,
+                    add_poll INTEGER NOT NULL,
                     departure_datetime datetime NOT NULL,
+                    channel_name TEXT NOT NULL,
                     recurrance TEXT NOT NULL
                 )
             """)
@@ -199,8 +201,10 @@ class iGrittyDB:
     def add_train_to_table(
         self,
         game: str,
-        channel_name: str,
+        custom_message: str,
+        add_poll: bool,
         departure_time: datetime,
+        channel_name: str,
         recurrance: Union[str, SupportedTrainRecurrance] = SupportedTrainRecurrance.ONCE,
     ):
         """
@@ -208,8 +212,10 @@ class iGrittyDB:
 
         Arguments:
             game (str): Game for which the train should be run
-            channel_name (str): channel on which the train should be run
+            custom_message (str): overwrite the game train message with a given message
+            add_poll (bool): whether to add a poll to this train
             departure_time (datetime): departure time of the train
+            channel_name (str): channel on which the train should be run
             recurrance (str, SupportedTrainRecurrance): how often the train should be run. Default Once
 
         Returns:
@@ -219,16 +225,26 @@ class iGrittyDB:
         recurrance = SupportedTrainRecurrance(recurrance)
         with self._db_connect(detect_types=True):
             logger.debug(
-                "Adding train [%s, %s, %s, %s]",
+                "Adding train [%s, %s, %s, %s, %s, %s]",
                 game,
-                channel_name,
+                custom_message,
+                add_poll,
                 departure_time,
+                channel_name,
                 recurrance.value,
             )
             self.cursor.execute(
-                "INSERT INTO scheduled_game_trains (game, channel_name, departure_datetime, recurrance)"
-                " VALUES (?, ?, ?, ?)",
-                (game, channel_name, departure_time, recurrance.value),
+                "INSERT INTO scheduled_game_trains"
+                " (game, custom_message, add_poll, departure_datetime, channel_name, recurrance)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    game,
+                    custom_message,
+                    add_poll,
+                    departure_time,
+                    channel_name,
+                    recurrance.value,
+                ),
             )
             self.conn.commit()
             return self.cursor.lastrowid
@@ -250,7 +266,7 @@ class iGrittyDB:
                 f"[ for channel {channel_name}]" if channel_name else "",
             )
             result = self.cursor.execute(
-                "SELECT id, game, channel_name, departure_datetime, recurrance"
+                "SELECT id, game, custom_message, add_poll, departure_datetime, channel_name, recurrance"
                 " FROM scheduled_game_trains WHERE channel_name like (?)"
                 " ORDER BY departure_datetime ASC",
                 (channel_name if channel_name else "%",),

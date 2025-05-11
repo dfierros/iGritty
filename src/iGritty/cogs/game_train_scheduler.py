@@ -192,12 +192,21 @@ class GameTrainScheduler(commands.Cog):
         now = datetime.datetime.now()
         await asyncio.sleep((time - now).total_seconds())
 
-    async def run_train_at_time(self, game: str, start_time: datetime.datetime, channel_id: int):
+    async def run_train_at_time(
+        self,
+        game: str,
+        custom_message: str,
+        add_poll: bool,
+        start_time: datetime.datetime,
+        channel_id: int,
+    ):
         """
         Run a train at some time in the future
 
         Arguments:
             game (str): game for which the train should run
+            custom_message (str): overwrite the game train message with a given message
+            add_poll (bool): whether to add a poll to this train
             start_time (datetime.datetime): time at which the train should depart
             channel_id (int): channel on which the train should run
 
@@ -206,7 +215,12 @@ class GameTrainScheduler(commands.Cog):
             logger.error("Cannot schedule past train at %s", start_time)
         else:
             await self.wait_until(start_time)
-            await self._train(channel_id=channel_id, game_name=game)
+            await self._train(
+                channel_id=channel_id,
+                game_name=game,
+                custom_message=custom_message,
+                add_poll=add_poll,
+            )
             logger.info("Scheduled train complete")
 
     # --------------------
@@ -219,6 +233,8 @@ class GameTrainScheduler(commands.Cog):
         ctx: commands.Context,
         time_str: str,
         game: Optional[str] = None,
+        custom_message: Optional[str] = None,
+        add_poll: bool = False,
         recurrance: Union[str, SupportedTrainRecurrance] = SupportedTrainRecurrance.ONCE,
         date_str: Optional[str] = None,
         channel_id: Optional[int] = None,
@@ -239,7 +255,7 @@ class GameTrainScheduler(commands.Cog):
         recurrance = SupportedTrainRecurrance(recurrance)
         logger.info(
             "Scheduled game train requested [%s]",
-            (time_str, game, recurrance, date_str, channel_id),
+            (time_str, game, custom_message, add_poll, recurrance, date_str, channel_id),
         )
 
         # Get the date
@@ -278,9 +294,25 @@ class GameTrainScheduler(commands.Cog):
             await ctx.send(msg)
             logger.error(msg)
 
-        task = asyncio.create_task(self.run_train_at_time(game=game, start_time=run_time, channel_id=channel.id))
+        task = asyncio.create_task(
+            self.run_train_at_time(
+                game=game,
+                custom_message=custom_message,
+                add_poll=add_poll,
+                start_time=run_time,
+                channel_id=channel.id,
+            )
+        )
 
-        train_id = self.db.add_train_to_table(game, channel.name, run_time, recurrance)
+        train_id = self.db.add_train_to_table(
+            game=game,
+            custom_message=custom_message,
+            add_poll=add_poll,
+            departure_time=run_time,
+            channel_name=channel.name,
+            recurrance=recurrance,
+        )
+
         self._scheduled_train_tasks[train_id] = task
         self.db.add_channel_to_table("text", channel.id, channel.name)
 
