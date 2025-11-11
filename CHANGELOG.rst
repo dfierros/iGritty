@@ -2,6 +2,10 @@
 Changelog
 =========
 
+Version 1.1.1
+===========
+- Fixing logging bug
+
 Version 1.1.0
 ===========
 - Fixing scheduled trains not working properly due to database reloads
