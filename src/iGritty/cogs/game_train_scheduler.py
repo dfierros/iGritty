@@ -160,7 +160,7 @@ class GameTrainScheduler(commands.Cog):
             custom_message (str, optional): whether to use a custom train message, default auto-generated
         """
         channel = self.bot.get_channel(channel_id)
-        logger.info("Should send %s train to channel: %s", channel)
+        logger.info("Should send %s train to channel: %s", game_name, channel)
 
         departure_time = (datetime.datetime.now(tz=TIMEZONE) + lead_time).strftime("%I:%M %p")
 
